@@ -33,6 +33,9 @@ config APP_FIRMWARE_MAIN
 config APP_FIRMWARE_BRINGUP
 	bool "Hardware bringup test firmware"
 	select SHELL
+	select GPIO_SHELL
+	select SENSOR_SHELL
+	select CONFIG_CHARACTER_FRAMEBUFFER_SHELL
 	help
 	  Firmware de teste: apertar um botao -> beep no buzzer + alterna cor do WS2812.
 	  Fonte: src/bringup.c

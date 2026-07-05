@@ -175,9 +175,9 @@ int main(void)
 			}
 
 			if (rc == 0) {
-				LOG_INF("accel x=%d.%06d y=%d.%06d z=%d.%06d",
-					a[0].val1, abs(a[0].val2), a[1].val1, abs(a[1].val2),
-					a[2].val1, abs(a[2].val2));
+				// LOG_INF("accel x=%d.%06d y=%d.%06d z=%d.%06d",
+				// 	a[0].val1, abs(a[0].val2), a[1].val1, abs(a[1].val2),
+				// 	a[2].val1, abs(a[2].val2));
 				if (have_display) {
 					display_accel(a, fh);
 				}

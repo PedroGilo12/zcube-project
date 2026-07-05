@@ -12,6 +12,8 @@
 / {
 	chosen {
 		zephyr,display = &oled;
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
 	};
 
 	aliases {
@@ -44,6 +46,10 @@
 			label = "Active buzzer";
 		};
 	};
+};
+
+&usb_serial {
+	status = "okay";
 };
 
 /* Route the shared I2C0 bus to SDA=GPIO3 / SCL=GPIO4 (OLED + MPU6050). */
