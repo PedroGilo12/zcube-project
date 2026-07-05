@@ -1,0 +1,46 @@
+# Zephyr Build and Output Directories
+build/
+.sconf_temp/
+.config
+.config.old
+zephyr/.config
+zephyr/.config.old
+
+# Python and West Environment
+.west/
+venv/
+.venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# CMake and Ninja artifacts (if built outside 'build')
+CMakeFiles/
+CMakeCache.txt
+CMakePresets.json
+!CMakePresets.json # Descomente se quiser versionar presets globais
+Makefile
+cmake_install.cmake
+ninja.build
+compile_commands.json
+
+# Toolchain and Editor Specifics
+.kconfig_df_save
+.cproject
+.project
+.settings/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.bak
+*~
+
+# Temporary and Log files
+*.log
+.nrfconnect-apps/
+*.idx

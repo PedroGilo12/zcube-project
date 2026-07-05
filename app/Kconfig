@@ -1,0 +1,42 @@
+# Copyright (c) 2019 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+menu "WS2812 Sample Configuration"
+
+config SAMPLE_LED_UPDATE_DELAY
+	int "Delay between LED updates in ms"
+	default 50
+	help
+	  Delay between LED updates in ms.
+
+config SAMPLE_LED_BRIGHTNESS
+	int "LED brightness"
+	default 16
+	range 1 255
+	help
+	  Brightness level of each LED. Defaults to a low value to make
+	  it easier to distinguish colors.
+
+endmenu
+
+choice APP_FIRMWARE
+	prompt "Firmware image to build"
+	default APP_FIRMWARE_MAIN
+	help
+	  Seleciona qual imagem compilar a partir desta aplicacao.
+
+config APP_FIRMWARE_MAIN
+	bool "Main application firmware"
+	help
+	  Aplicacao principal do zcube (a ser desenvolvida). Fonte: src/main.c
+
+config APP_FIRMWARE_BRINGUP
+	bool "Hardware bringup test firmware"
+	select SHELL
+	help
+	  Firmware de teste: apertar um botao -> beep no buzzer + alterna cor do WS2812.
+	  Fonte: src/bringup.c
+
+endchoice
+
+source "Kconfig.zephyr"
