@@ -12,33 +12,33 @@
 
 LOG_MODULE_REGISTER(bringup, LOG_LEVEL_INF);
 
-#define STRIP_NODE        DT_ALIAS(led_strip)
-#define ACCEL_NODE		  DT_ALIAS(accel0)
-#define BUZZER_NODE		  DT_ALIAS(buzzer)
+#define STRIP_NODE  DT_ALIAS(led_strip)
+#define ACCEL_NODE  DT_ALIAS(accel0)
+#define BUZZER_NODE DT_ALIAS(buzzer)
 
-#define STRIP_NUM_PIXELS  DT_PROP(STRIP_NODE, chain_length)
-#define BEEP_MS           60
-#define REFRESH_MS        200
-#define BRIGHT            CONFIG_SAMPLE_LED_BRIGHTNESS
+#define STRIP_NUM_PIXELS DT_PROP(STRIP_NODE, chain_length)
+#define BEEP_MS          60
+#define REFRESH_MS       200
+#define BRIGHT           CONFIG_SAMPLE_LED_BRIGHTNESS
 
-static const struct device *const strip   = DEVICE_DT_GET(STRIP_NODE);
-static const struct device *const accel   = DEVICE_DT_GET(ACCEL_NODE);
-static const struct led_dt_spec buzzer    = LED_DT_SPEC_GET(BUZZER_NODE);
+static const struct device *const strip = DEVICE_DT_GET(STRIP_NODE);
+static const struct device *const accel = DEVICE_DT_GET(ACCEL_NODE);
+static const struct led_dt_spec buzzer = LED_DT_SPEC_GET(BUZZER_NODE);
 
 static const struct device *const display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 
 static const struct led_rgb palette[] = {
-	{ .r = 0,      .g = 0,      .b = 0      }, /* off   */
-	{ .r = BRIGHT, .g = 0,      .b = 0      }, /* red   */
-	{ .r = 0,      .g = BRIGHT, .b = 0      }, /* green */
-	{ .r = 0,      .g = 0,      .b = BRIGHT }, /* blue  */
+	{.r = 0, .g = 0, .b = 0},      /* off   */
+	{.r = BRIGHT, .g = 0, .b = 0}, /* red   */
+	{.r = 0, .g = BRIGHT, .b = 0}, /* green */
+	{.r = 0, .g = 0, .b = BRIGHT}, /* blue  */
 };
 
 static struct led_rgb pixels[STRIP_NUM_PIXELS];
 static K_SEM_DEFINE(press_sem, 0, 10);
 
-/* Callback dos botões, quando ocorre interrupção no subsistema input verifica se a interrupção gerada
-é a interrupção de um dos botões e incrementa o semaforo. */
+/* Callback dos botões, quando ocorre interrupção no subsistema input verifica se a interrupção
+gerada é a interrupção de um dos botões e incrementa o semaforo. */
 static void button_cb(struct input_event *evt, void *user_data)
 {
 	/* so reage ao pressionar (value==1) */
@@ -74,7 +74,7 @@ static void beep(void)
 static void fmt_axis(char *buf, size_t n, char axis, const struct sensor_value *v)
 {
 	int32_t whole = v->val1;
-	int32_t frac  = v->val2 / 10000;
+	int32_t frac = v->val2 / 10000;
 	bool neg = (v->val1 < 0) || (v->val1 == 0 && v->val2 < 0);
 
 	if (whole < 0) {

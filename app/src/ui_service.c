@@ -1,7 +1,11 @@
 
 /**
  * @file ui_service.c
- * @author your name (you@domain.com)
+ *
+ * @author Pedro Giló (phvg@ic.ufal.br)
+ * @author Thiago Laurentino (tfml@ic.ufal.br)
+ * @author Caio Oliveira (cofa@ic.ufal.br)
+ *
  * @brief Servico de UI: renderiza a tela do timer Pomodoro em display OLED e
  *        trata a entrada de botoes.
  * @version 0.1
@@ -19,6 +23,7 @@
 #include <zephyr/input/input.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/display/cfb.h>
+#include <zephyr/drivers/led.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 #include <stdio.h>
@@ -31,6 +36,12 @@ LOG_MODULE_REGISTER(ui_service, LOG_LEVEL_DBG);
 
 /** @brief Prioridade da thread de UI. */
 #define UI_SERVICE_PRIORITY 6
+
+/** @brief Duracao do beep curto de clique de botao (ms). */
+#define UI_SERVICE_CLICK_BEEP_MS 40
+
+/** @brief Tempo de long press dos dois botoes para pular a fase (ms). */
+#define UI_SERVICE_COMBO_LONG_PRESS_MS 1000
 
 /** @brief Node do display escolhido no devicetree. */
 #define UI_SERVICE_DISPLAY_NODE DT_CHOSEN(zephyr_display)
@@ -189,10 +200,51 @@ static void ui_service_thread(void *p1, void *p2, void *p3);
 static void ui_input_cb(struct input_event *evt, void *user_data);
 
 /**
+ * @brief Callback do timer de apito: alterna o buzzer on/off a cada meio periodo.
+ *
+ * @param t Timer que disparou (nao utilizado).
+ */
+static void buzzer_beep_expiry(struct k_timer *t);
+
+/**
+ * @brief Callback do timer de duracao: encerra o apito ao fim da duracao.
+ *
+ * @param t Timer que disparou (nao utilizado).
+ */
+static void buzzer_stop_expiry(struct k_timer *t);
+
+/**
+ * @brief Inicia o apito do buzzer (padrao despertador).
+ *
+ * @param period_ms Ciclo completo on/off do apito (ms).
+ * @param duration_ms Tempo total apitando (ms); 0 = indefinido.
+ */
+static void buzzer_start(uint32_t period_ms, uint32_t duration_ms);
+
+/**
+ * @brief Para o apito do buzzer imediatamente. Idempotente.
+ */
+static void buzzer_stop(void);
+
+/**
+ * @brief Callback do timer de combo: publica APP_FSM_EVENT_SKIP quando os dois
+ *        botoes ficam pressionados pelo tempo de long press.
+ *
+ * @param t Timer que disparou (nao utilizado).
+ */
+static void combo_expiry(struct k_timer *t);
+
+/**
  * @brief Ponteiro para o dispositivo de display OLED.
  *
  */
 static const struct device *const display = DEVICE_DT_GET(UI_SERVICE_DISPLAY_NODE);
+
+/**
+ * @brief Buzzer ativo (GPIO via LED API).
+ *
+ */
+static const struct led_dt_spec buzzer = LED_DT_SPEC_GET(DT_ALIAS(buzzer));
 
 /**
  * @brief Singleton do serviço de interface de usuario.
@@ -201,6 +253,13 @@ static const struct device *const display = DEVICE_DT_GET(UI_SERVICE_DISPLAY_NOD
 static struct ui_service {
 	const struct ui_screen
 		ui_screens[_UI_SCREEN_AMOUNT]; /**< Tabela de telas registradas (id -> render)*/
+	struct k_timer buzzer_beep_timer;  /**< Timer periodico que alterna o buzzer on/off no apito. */
+	struct k_timer buzzer_stop_timer;  /**< Timer one-shot que encerra o apito ao fim da duracao. */
+	bool buzzer_state;                 /**< Fase atual do toggle do buzzer (true = ligado). */
+	bool buzzer_alarm_active;          /**< Alarme indefinido ativo (nao interrompido por beeps curtos). */
+	struct k_timer combo_timer;        /**< Timer de deteccao de long press dos dois botoes. */
+	bool key0_down;                    /**< Estado (pressionado) do botao 0. */
+	bool key1_down;                    /**< Estado (pressionado) do botao 1. */
 } self = {
 	.ui_screens =
 		{
@@ -219,6 +278,9 @@ ZBUS_SUBSCRIBER_DEFINE(ui_service_subscriber, 8);
 ZBUS_CHAN_DEFINE(ui_cmd_chan, struct ui_msg, NULL, NULL, ZBUS_OBSERVERS(ui_service_subscriber),
 		 ZBUS_MSG_INIT(0));
 
+ZBUS_CHAN_DEFINE(ui_buzzer_chan, struct ui_buzzer_msg, NULL, NULL,
+		 ZBUS_OBSERVERS(ui_service_subscriber), ZBUS_MSG_INIT(0));
+
 K_THREAD_DEFINE(ui_service_tid, UI_SERVICE_STACK_SIZE, ui_service_thread, NULL, NULL, NULL,
 		UI_SERVICE_PRIORITY, 0, 0);
 
@@ -231,6 +293,70 @@ K_THREAD_DEFINE(ui_service_tid, UI_SERVICE_STACK_SIZE, ui_service_thread, NULL, 
 int ui_service_update(const struct ui_msg *msg)
 {
 	return zbus_chan_pub(&ui_cmd_chan, msg, K_MSEC(50));
+}
+
+int ui_service_buzzer(const struct ui_buzzer_msg *msg)
+{
+	return zbus_chan_pub(&ui_buzzer_chan, msg, K_MSEC(50));
+}
+
+static void buzzer_beep_expiry(struct k_timer *t)
+{
+	ARG_UNUSED(t);
+
+	self.buzzer_state = !self.buzzer_state;
+	if (self.buzzer_state) {
+		led_on_dt(&buzzer);
+	} else {
+		led_off_dt(&buzzer);
+	}
+}
+
+static void buzzer_stop_expiry(struct k_timer *t)
+{
+	ARG_UNUSED(t);
+	buzzer_stop();
+}
+
+static void buzzer_start(uint32_t period_ms, uint32_t duration_ms)
+{
+	if (period_ms == 0) {
+		return;
+	}
+
+	if (duration_ms == 0) {
+		self.buzzer_alarm_active = true; /* alarme indefinido */
+	} else if (self.buzzer_alarm_active) {
+		return; /* nao interrompe um alarme ativo com um beep curto de clique */
+	}
+
+	/* Comeca ligado; alterna a cada meio periodo (liga metade, desliga metade). */
+	self.buzzer_state = true;
+	led_on_dt(&buzzer);
+	k_timer_start(&self.buzzer_beep_timer, K_MSEC(period_ms / 2), K_MSEC(period_ms / 2));
+
+	if (duration_ms > 0) {
+		k_timer_start(&self.buzzer_stop_timer, K_MSEC(duration_ms), K_NO_WAIT);
+	} else {
+		k_timer_stop(&self.buzzer_stop_timer); /* 0 = apita indefinidamente */
+	}
+}
+
+static void buzzer_stop(void)
+{
+	k_timer_stop(&self.buzzer_beep_timer);
+	k_timer_stop(&self.buzzer_stop_timer);
+	led_off_dt(&buzzer);
+	self.buzzer_state = false;
+	self.buzzer_alarm_active = false;
+}
+
+static void combo_expiry(struct k_timer *t)
+{
+	ARG_UNUSED(t);
+
+	struct app_fsm_evt_data msg = {.id = APP_FSM_EVENT_SKIP};
+	(void)zbus_chan_pub(&app_fsm_evt_chan, &msg, K_NO_WAIT); /* K_NO_WAIT: seguro em ISR */
 }
 
 static void ui_fill_rect(const struct device *disp, int x, int y, int w, int h)
@@ -320,8 +446,7 @@ static void draw_cycle_dots(const struct device *disp, uint8_t done, uint8_t tot
 static void draw_action_arrow(const struct device *disp, enum ui_arrow_dir dir)
 {
 	int cx = UI_SERVICE_ARROW_CX;
-	int top = UI_SERVICE_PILL_Y +
-		  (UI_SERVICE_LINE_HEIGHT - UI_SERVICE_ARROW_H) / 2;
+	int top = UI_SERVICE_PILL_Y + (UI_SERVICE_LINE_HEIGHT - UI_SERVICE_ARROW_H) / 2;
 
 	for (int row = 0; row < UI_SERVICE_ARROW_H; row++) {
 		int num = UI_SERVICE_ARROW_H - 1 - row;
@@ -350,10 +475,10 @@ static void ui_screen_timer_render(const struct device *disp, const struct ui_ms
 	cfb_framebuffer_clear(disp, false);
 
 	ui_draw_status_bar(disp, msg);
-	ui_draw_big_time(disp, mm, ss);                                               
-	draw_cycle_dots(disp, msg->data.main.cycle_done, msg->data.main.cycle_total); 
-	ui_draw_state_pill(disp, msg->data.main.state, msg->data.main.phase);         
-	draw_action_arrow(disp, msg->data.main.arrow_dir);                            
+	ui_draw_big_time(disp, mm, ss);
+	draw_cycle_dots(disp, msg->data.main.cycle_done, msg->data.main.cycle_total);
+	ui_draw_state_pill(disp, msg->data.main.state, msg->data.main.phase);
+	draw_action_arrow(disp, msg->data.main.arrow_dir);
 
 	if (msg->data.main.state == UI_STATE_PAUSED) {
 		draw_profile_arrows(disp);
@@ -406,6 +531,13 @@ static void ui_service_thread(void *p1, void *p2, void *p3)
 	const struct zbus_channel *chan;
 	struct ui_msg msg;
 
+	k_timer_init(&self.buzzer_beep_timer, buzzer_beep_expiry, NULL);
+	k_timer_init(&self.buzzer_stop_timer, buzzer_stop_expiry, NULL);
+	k_timer_init(&self.combo_timer, combo_expiry, NULL);
+	if (!led_is_ready_dt(&buzzer)) {
+		LOG_WRN("buzzer nao esta pronto");
+	}
+
 	(void)ui_display_init();
 	ui_render(display, &(const struct ui_msg){
 				   .screen = UI_SCREEN_MAIN,
@@ -428,6 +560,18 @@ static void ui_service_thread(void *p1, void *p2, void *p3)
 				continue;
 			}
 			ui_render(display, &msg);
+		} else if (chan == &ui_buzzer_chan) {
+			struct ui_buzzer_msg bmsg;
+			int rc = zbus_chan_read(&ui_buzzer_chan, &bmsg, K_MSEC(200));
+			if (rc) {
+				LOG_WRN("zbus_chan_read (ui_buzzer) falhou: %d", rc);
+				continue;
+			}
+			if (bmsg.cmd == UI_BUZZER_ON) {
+				buzzer_start(bmsg.period_ms, bmsg.duration_ms);
+			} else {
+				buzzer_stop();
+			}
 		}
 	}
 }
@@ -436,28 +580,37 @@ static void ui_input_cb(struct input_event *evt, void *user_data)
 {
 	ARG_UNUSED(user_data);
 
-	if (evt->type != INPUT_EV_KEY || evt->value == 0) {
+	if (evt->type != INPUT_EV_KEY) {
 		return;
 	}
 
-	struct app_fsm_evt_data msg = {0};
+	bool down = (evt->value != 0);
 
 	switch (evt->code) {
 	case INPUT_KEY_0: {
-		msg.id = APP_FSM_EVENT_NEXT;
+		self.key0_down = down;
 	} break;
 	case INPUT_KEY_1: {
-		msg.id = APP_FSM_EVENT_PREVIOUS;
+		self.key1_down = down;
 	} break;
 	default: {
-		/* Do nothing */
-	} break;
+		return;
 	}
-	LOG_INF("id: %d", msg.id);
+	}
 
-	int rc = zbus_chan_pub(&app_fsm_evt_chan, &msg, K_NO_WAIT);
+	if (down) {
+		ui_service_buzzer(&(struct ui_buzzer_msg){
+			.cmd = UI_BUZZER_ON,
+			.period_ms = UI_SERVICE_CLICK_BEEP_MS * 2,
+			.duration_ms = UI_SERVICE_CLICK_BEEP_MS,
+		});
+	}
 
-	if (rc) {
-		LOG_WRN("fail to publish to button: %d", rc);
+	/* Dois botoes pressionados: arma o long press que pula a fase; ao soltar
+	 * qualquer um, cancela. */
+	if (self.key0_down && self.key1_down) {
+		k_timer_start(&self.combo_timer, K_MSEC(UI_SERVICE_COMBO_LONG_PRESS_MS), K_NO_WAIT);
+	} else {
+		k_timer_stop(&self.combo_timer);
 	}
 }

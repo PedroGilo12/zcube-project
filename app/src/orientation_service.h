@@ -1,6 +1,10 @@
 /**
  * @file orientation_service.h
- * @author your name (you@domain.com)
+ *
+ * @author Pedro Giló (phvg@ic.ufal.br)
+ * @author Thiago Laurentino (tfml@ic.ufal.br)
+ * @author Caio Oliveira (cofa@ic.ufal.br)
+ *
  * @brief Interface publica do servico de orientacao: face do cubo voltada para
  *        cima, deduzida da gravidade pelo acelerometro.
  * @version 0.1

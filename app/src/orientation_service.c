@@ -1,6 +1,10 @@
 /**
  * @file orientation_service.c
- * @author your name (you@domain.com)
+ *
+ * @author Pedro Giló (phvg@ic.ufal.br)
+ * @author Thiago Laurentino (tfml@ic.ufal.br)
+ * @author Caio Oliveira (cofa@ic.ufal.br)
+ *
  * @brief Servico de orientacao: amostra o acelerometro, filtra (EWMA), classifica
  *        a face dominante com histerese e publica mudancas no canal da FSM.
  * @version 0.1
@@ -90,21 +94,21 @@ static const struct device *const accel = DEVICE_DT_GET(DT_ALIAS(accel0));
  *
  */
 static struct orientation_service {
-	const enum orientation_face
-		orientation_map[_ORIENTATION_AXIS_AMOUNT][2]; /**< Eixo/sinal -> face. */
-	enum orientation_face current_face;                   /**< Ultima face publicada. */
+	const enum orientation_face orientation_map[_ORIENTATION_AXIS_AMOUNT]
+						   [2]; /**< Eixo/sinal -> face. */
+	enum orientation_face current_face;             /**< Ultima face publicada. */
 } self = {
-	.orientation_map = {
-		[ORIENTATION_AXIS_X] = { ORIENTATION_FRONT, ORIENTATION_BACK },
-		[ORIENTATION_AXIS_Y] = { ORIENTATION_RIGHT, ORIENTATION_LEFT },
-		[ORIENTATION_AXIS_Z] = { ORIENTATION_TOP, ORIENTATION_BOTTOM },
-	},
+	.orientation_map =
+		{
+			[ORIENTATION_AXIS_X] = {ORIENTATION_FRONT, ORIENTATION_BACK},
+			[ORIENTATION_AXIS_Y] = {ORIENTATION_RIGHT, ORIENTATION_LEFT},
+			[ORIENTATION_AXIS_Z] = {ORIENTATION_TOP, ORIENTATION_BOTTOM},
+		},
 	.current_face = ORIENTATION_UNKNOWN,
 };
 
-K_THREAD_DEFINE(orientation_service_tid, ORIENTATION_STACK_SIZE,
-		orientation_service_thread, NULL, NULL, NULL,
-		ORIENTATION_PRIORITY, 0, 0);
+K_THREAD_DEFINE(orientation_service_tid, ORIENTATION_STACK_SIZE, orientation_service_thread, NULL,
+		NULL, NULL, ORIENTATION_PRIORITY, 0, 0);
 
 const char *orientation_face_str(enum orientation_face f)
 {
@@ -219,7 +223,8 @@ static void orientation_service_thread(void *p1, void *p2, void *p3)
 				if (rc) {
 					LOG_WRN("falha ao publicar orientacao: %d", rc);
 				} else {
-					LOG_INF("orientacao -> %s", orientation_face_str(candidate));
+					LOG_INF("orientacao -> %s",
+						orientation_face_str(candidate));
 					self.current_face = candidate;
 				}
 			}

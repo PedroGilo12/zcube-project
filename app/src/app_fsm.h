@@ -1,6 +1,10 @@
 /**
  * @file app_fsm.h
- * @author your name (you@domain.com)
+ *
+ * @author Pedro Giló (phvg@ic.ufal.br)
+ * @author Thiago Laurentino (tfml@ic.ufal.br)
+ * @author Caio Oliveira (cofa@ic.ufal.br)
+ *
  * @brief Interface publica da FSM do Pomodoro: eventos e struct de dados de
  *        evento postados no canal zbus da FSM.
  * @version 0.1
@@ -16,6 +20,8 @@
 #include "zbus_chan.h"
 #include "orientation_service.h"
 
+#include <stdint.h>
+
 /**
  * @brief Evento processado pela FSM do Pomodoro.
  *
@@ -26,6 +32,8 @@ enum app_fsm_event {
 	APP_FSM_EVENT_PREVIOUS,            /**< Zera o timer atual. */
 	APP_FSM_EVENT_ORIENTATION_CHANGED, /**< Face para cima mudou. */
 	APP_FSM_EVENT_TICK,                /**< 1 Hz: decrementa o contador ativo. */
+	APP_FSM_EVENT_SKIP,                /**< Pula a fase atual (long press dos dois botoes). */
+	APP_FSM_EVENT_CONFIG,              /**< Nova configuracao (duracoes) aplicada via BLE. */
 };
 
 /**
@@ -38,10 +46,14 @@ struct app_fsm_evt_data {
 	union data {
 		struct orientation {
 			enum orientation_face previous_face; /**< Face anterior. */
-			enum orientation_face
-				current_face; /**< Face atual (p/ ORIENTATION_CHANGED). */
-		} orientation;                /**< Dados de mudanca de orientacao. */
-	} data;                               /**< Carga util especifica do evento. */
+			enum orientation_face current_face;  /**< Face atual. */
+		} orientation;                               /**< Dados de mudanca de orientacao. */
+		struct config_evt_data {
+			uint16_t work_s;       /**< Nova duracao WORK (s). */
+			uint16_t break_s;      /**< Nova duracao BREAK (s). */
+			uint16_t long_break_s; /**< Nova duracao LONG_BREAK (s). */
+		} config;
+	} data; /**< Carga util especifica do evento. */
 };
 
 #endif /* APP_FSM_H */

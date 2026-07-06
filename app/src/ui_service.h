@@ -1,13 +1,17 @@
 /**
  * @file ui_service.h
- * @author your name (you@domain.com)
+ *
+ * @author Pedro Giló (phvg@ic.ufal.br)
+ * @author Thiago Laurentino (tfml@ic.ufal.br)
+ * @author Caio Oliveira (cofa@ic.ufal.br)
+ *
  * @brief Interface publica do servico de UI: tipos de mensagem e API de
  *        atualizacao da tela.
  * @version 0.1
  * @date 2026-07-05
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #ifndef UI_SERVICE_H
@@ -75,11 +79,38 @@ struct ui_msg {
 };
 
 /**
+ * @brief Comando de controle do buzzer.
+ *
+ */
+enum ui_buzzer_cmd {
+	UI_BUZZER_OFF = 0, /**< Desliga o buzzer se estiver apitando. */
+	UI_BUZZER_ON,      /**< Inicia o apito (despertador). */
+};
+
+/**
+ * @brief Mensagem de controle do buzzer enviada ao servico de UI.
+ *
+ */
+struct ui_buzzer_msg {
+	enum ui_buzzer_cmd cmd; /**< Ligar ou desligar o buzzer. */
+	uint32_t period_ms;     /**< Ciclo completo on/off do apito (ms). Usado se cmd == ON. */
+	uint32_t duration_ms;   /**< Tempo total apitando (ms). 0 = indefinido. */
+};
+
+/**
  * @brief Publica uma mensagem de atualizacao no canal zbus da UI.
  *
  * @param msg [in] Mensagem com o estado a renderizar.
  * @return int 0 em caso de sucesso ou inteiro negativo em caso de falha.
  */
 int ui_service_update(const struct ui_msg *msg);
+
+/**
+ * @brief Publica um comando de buzzer no canal zbus do buzzer.
+ *
+ * @param msg [in] Comando (ligar/desligar) e parametros do apito.
+ * @return int 0 em caso de sucesso ou inteiro negativo em caso de falha.
+ */
+int ui_service_buzzer(const struct ui_buzzer_msg *msg);
 
 #endif /* UI_SERVICE_H */
