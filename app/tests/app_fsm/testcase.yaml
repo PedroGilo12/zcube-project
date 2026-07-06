@@ -1,0 +1,11 @@
+tests:
+  app.fsm.blackbox:
+    tags:
+      - fsm
+      - smf
+    integration_platforms:
+      - native_sim
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+      - esp32s3_devkitc/esp32s3/procpu

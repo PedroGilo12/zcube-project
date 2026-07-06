@@ -44,3 +44,6 @@ compile_commands.json
 *.log
 .nrfconnect-apps/
 *.idx
+
+*.cache/
+*twister-out/

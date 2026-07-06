@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) 2024-2025 Espressif Systems (Shanghai) Co., Ltd.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	chosen {
+		zephyr,display = &oled;
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
+	};
+
+	aliases {
+		led-strip = &led_strip;
+		accel0 = &mpu6050;
+		sw0 = &btn1;
+		sw1 = &btn2;
+		buzzer = &buzzer;
+	};
+
+	buttons: gpio_keys {
+		compatible = "gpio-keys";
+
+		btn1: button_1 {
+			gpios = <&gpio0 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		btn2: button_2 {
+			gpios = <&gpio0 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_1>;
+		};
+	};
+
+	buzzer_dev: gpio_buzzer {
+		compatible = "gpio-leds";
+
+		buzzer: buzzer_gpio {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "Active buzzer";
+		};
+	};
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+/* Route the shared I2C0 bus to SDA=GPIO3 / SCL=GPIO4 (OLED + MPU6050). */
+&i2c0_default {
+	group1 {
+		pinmux = <I2C0_SDA_GPIO3>, <I2C0_SCL_GPIO4>;
+	};
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	oled: sh1106@3c {
+		compatible = "sinowealth,sh1106";
+		reg = <0x3c>;
+		width = <128>;
+		height = <64>;
+		segment-offset = <2>;
+		page-offset = <0>;
+		display-offset = <0>;
+		multiplex-ratio = <63>;
+		prechargep = <0x22>;
+		segment-remap;
+		com-invdir;
+	};
+
+	mpu6050: mpu6050@68 {
+		compatible = "invensense,mpu6050";
+		reg = <0x68>;
+	};
+};
+
+&i2s0_default {
+	group1 {
+		pinmux = <I2S0_O_SD_GPIO48>;
+	};
+};
+
+i2s_led: &i2s0 {
+	status = "okay";
+
+	dmas = <&dma 3>;
+	dma-names = "tx";
+
+	led_strip: ws2812@0 {
+		compatible = "worldsemi,ws2812-i2s";
+
+		reg = <0>;
+		chain-length = <1>;
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE>;
+		reset-delay = <500>;
+	};
+};
+
+&dma {
+	status = "okay";
+};
